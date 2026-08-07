@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mdy</title>
+<style>
+:root {
+--primaryColor: #326182;
+--backgroundLight: #FAFAFB;
+--backgroundMiddle: #f5f5f5;
+--backgroundMain: #DEE2E6;
+--textDark: #2C2F33;
+--dividerColor: #E9ECEF;
+--headerBarColor: rgba(190, 213, 231, 0.75);
+--borderRadius: 8px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+background: var(--backgroundMain);
+color: var(--textDark);
+font-family: "Microsoft YaHei", sans-serif;
+min-height: 100vh;
+}
+.headerBar {
+display: flex;
+justify-content: space-between;
+align-items: center;
+padding: 12px 24px;
+background: var(--headerBarColor);
+backdrop-filter: blur(8px);
+position: sticky;
+top: 0;
+z-index: 10;
+}
+.logo { font-size: 18px; font-weight: bold; letter-spacing: 1px; }
+.themeBtn {
+border: none;
+background: transparent;
+cursor: pointer;
+padding: 6px;
+border-radius: 50%;
+}
+.themeBtn:hover { background: rgba(0,0,0,0.08); }
+.hero {
+text-align: center;
+padding: 80px 20px 60px;
+}
+.hero h1 { font-size: 36px; margin-bottom: 12px; }
+.hero p { color: #666; font-size: 16px; }
+.cards {
+display: flex;
+justify-content: center;
+gap: 20px;
+flex-wrap: wrap;
+padding: 20px 40px 60px;
+max-width: 1000px;
+margin: 0 auto;
+}
+.card {
+background: var(--backgroundLight);
+border-radius: var(--borderRadius);
+padding: 24px;
+width: 240px;
+box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+transition: transform 0.3s;
+}
+.card:hover { transform: translateY(-4px); }
+.card h3 { margin-bottom: 8px; color: var(--primaryColor); }
+.card p { font-size: 14px; color: #555; line-height: 1.6; }
+.footer {
+text-align: center;
+padding: 30px;
+color: #888;
+font-size: 13px;
+border-top: 1px solid var(--dividerColor);
+}
+body.dark {
+--backgroundMain: #111111;
+--backgroundLight: #282828;
+--textDark: #FFFFFF;
+--headerBarColor: rgba(9, 36, 127, 0.75);
+--dividerColor: #404040;
+}
+body.dark .hero p,
+body.dark .card p { color: #aaa; }
+body.dark .footer { color: #666; }
+</style>
+</head>
+<body>
+<div class="headerBar">
+<div class="logo">MDY's page</div>
+<button class="themeBtn" id="themeBtn" title="切换主题"></button>
+</div>
+<div class="hero">
+<h1>你好，我是 mdy</h1>
+<p>一个热衷于捣鼓蜜汁の小代码的神人</p>
+</div>
+<div class="cards">
+<div class="card">
+<h3>关于我</h3>
+<p>不知道咋填</p>
+</div>
+<div class="card">
+<h3>技能</h3>
+<p>写点凑代码，一般是直接vibe coding，ai太好用辣</p>
+</div>
+<div class="card">
+<h3>联系方式</h3>
+<p>mdy114514mdy@outlook.com</p>
+</div>
+</div>
+<div class="footer">
+© 2026 MDY· 用 使 制作
+</div>
+<script>
+const btn = document.getElementById('themeBtn');
+const saved = localStorage.getItem('theme');
+if (saved === 'dark') document.body.classList.add('dark');
+btn.addEventListener('click', () => {
+document.body.classList.toggle('dark');
+const isDark = document.body.classList.contains('dark');
+btn.textContent = isDark ? '' : '';
+localStorage.setItem('theme', isDark ? 'dark' : 'light');
+});
+</script>
+</body>
+</html>
