@@ -297,6 +297,13 @@ body.dark .visitor-counter { background: #282828; border-color: #404040; }
 body.dark .visitor-counter .num { color: #7FB3D5; }
 body.dark .visitor-counter .global-badge { filter: invert(0.85) hue-rotate(180deg); }
 
+/* SVG 图标通用样式 */
+.icon-svg {
+  display: inline-block;
+  vertical-align: -0.15em;
+  flex-shrink: 0;
+}
+
 /* 页脚 */
 .footer { display: flex; align-items: center; justify-content: center; gap: 16px; }
 
@@ -395,7 +402,7 @@ body.dark .copy-email-btn:hover { background: #7FB3D5; color: #111; }
 </div>
 
 <!-- 背景加载指示器 -->
-<div id="bg-loader">📷 加载背景中...</div>
+<div id="bg-loader"><svg class="icon-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> 加载背景中...</div>
 
 <!-- 老 IE 升级提示，现代浏览器完全忽略 -->
 <!--[if lte IE 8]>
@@ -412,8 +419,8 @@ body.dark .copy-email-btn:hover { background: #7FB3D5; color: #111; }
 
 <div class="headerBar">
   <div class="logo">MDY's page</div>
-  <button class="themeBtn" id="themeBtn" title="切换主题">🌙</button>
-  <button class="bg-refresh-btn" id="bgRefreshBtn" title="换一张背景">📷</button>
+  <button class="themeBtn" id="themeBtn" title="切换主题"><svg class="icon-svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
+  <button class="bg-refresh-btn" id="bgRefreshBtn" title="换一张背景"><svg class="icon-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>
 </div>
 
 <div class="page">
@@ -425,14 +432,14 @@ body.dark .copy-email-btn:hover { background: #7FB3D5; color: #111; }
     </p>
     <div class="visitor-counter">
       <span class="item">
-        <span class="icon">🧡</span>
+        <span class="icon"><svg class="icon-svg" viewBox="0 0 24 24" width="16" height="16" fill="#ff6b6b"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></span>
         <span>您第</span>
         <span class="num" id="localVisits">1</span>
         <span>次访问本站</span>
       </span>
       <span class="divider"></span>
       <span class="item">
-        <span class="icon">👀</span>
+        <span class="icon"><svg class="icon-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>
         <span>全站访问量</span>
         <img src="https://hits.sh/mdy114514mdy.github.io.svg?label=hits&color=326182" alt="hits" id="globalBadge" class="global-badge">
       </span>
@@ -461,7 +468,7 @@ body.dark .copy-email-btn:hover { background: #7FB3D5; color: #111; }
   </div>
 
   <div class="footer">
-    <span>© 2026 MDY · 用 ❤️ 制作</span>
+    <span>© 2026 MDY · 用 <svg class="icon-svg" viewBox="0 0 24 24" width="14" height="14" fill="#e74c3c"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> 制作</span>
   </div>
 </div>
 
@@ -497,8 +504,11 @@ body.dark .copy-email-btn:hover { background: #7FB3D5; color: #111; }
 
   if (getTheme() === 'dark') addClass(document.body, 'dark');
 
+  var moonSvg = '<svg class="icon-svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  var sunSvg = '<svg class="icon-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>';
+
   function updateIcon() {
-    btn.innerHTML = hasClass(document.body, 'dark') ? '☀️' : '🌙';
+    btn.innerHTML = hasClass(document.body, 'dark') ? sunSvg : moonSvg;
   }
   updateIcon();
 
@@ -552,7 +562,7 @@ body.dark .copy-email-btn:hover { background: #7FB3D5; color: #111; }
       // 离线时显示文字提示
       var item = badge.closest('.item');
       if (item) {
-        item.innerHTML = '<span class="icon">👀</span><span>离线模式</span>';
+        item.innerHTML = '<span class="icon"><svg class="icon-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span><span>离线模式</span>';
       }
     };
   }
@@ -610,8 +620,8 @@ body.dark .copy-email-btn:hover { background: #7FB3D5; color: #111; }
   var texts = [
     '一个热衷于捣鼓蜜汁の小代码的神人',
     'Hello, I am mdy',
-    'Vibe coding, 快乐加倍 ✨',
-    '今天也要敲代码鸭 🦆'
+    'Vibe coding, 快乐加倍',
+    '今天也要敲代码鸭'
   ];
   var ti = 0, ci = 0, deleting = false;
 
@@ -673,7 +683,7 @@ body.dark .copy-email-btn:hover { background: #7FB3D5; color: #111; }
     ta.style.opacity = '0';
     document.body.appendChild(ta);
     ta.select();
-    try { document.execCommand('copy'); showToast('✅ 邮箱已复制到剪贴板'); btn.classList.add('copied'); btn.textContent = '已复制'; setTimeout(function () { btn.classList.remove('copied'); btn.textContent = '复制邮箱'; }, 2000); }
+    try { document.execCommand('copy'); showToast('✓ 邮箱已复制到剪贴板'); btn.classList.add('copied'); btn.textContent = '已复制'; setTimeout(function () { btn.classList.remove('copied'); btn.textContent = '复制邮箱'; }, 2000); }
     catch (e) { showToast('复制失败，请手动复制'); }
     document.body.removeChild(ta);
   }
@@ -682,7 +692,7 @@ body.dark .copy-email-btn:hover { background: #7FB3D5; color: #111; }
     var email = text.textContent.trim();
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(email).then(function () {
-        showToast('✅ 邮箱已复制到剪贴板');
+        showToast('✓ 邮箱已复制到剪贴板');
         btn.classList.add('copied'); btn.textContent = '已复制';
         setTimeout(function () { btn.classList.remove('copied'); btn.textContent = '复制邮箱'; }, 2000);
       }).catch(function () { fallbackCopy(email); });
@@ -808,7 +818,7 @@ if (themeBtn) {
 }
 
 function enableRainbow() {
-  if (window.showToast) window.showToast('🌈 彩虹模式已开启！再点一次关闭');
+  if (window.showToast) window.showToast('彩虹模式已开启！再点一次关闭');
   document.body.classList.toggle('rainbow');
   if (document.body.classList.contains('rainbow')) {
     // 动态背景：随机颜色循环
