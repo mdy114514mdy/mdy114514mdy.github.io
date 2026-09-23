@@ -29,6 +29,75 @@ body {
   min-height: 100vh;
 }
 
+/* ===== 动态背景层 ===== */
+#bg-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -2;
+  overflow: hidden;
+  background: linear-gradient(135deg, #DEE2E6 0%, #C8DBE8 100%);
+}
+#bg-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+#bg-image.loaded {
+  opacity: 1;
+}
+#bg-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.72);
+  transition: background 0.3s ease;
+}
+body.dark #bg-overlay {
+  background: rgba(0, 0, 0, 0.62);
+}
+
+/* 背景加载指示器 */
+#bg-loader {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  font-size: 13px;
+  color: #666;
+  background: rgba(255,255,255,0.85);
+  padding: 8px 18px;
+  border-radius: 20px;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+#bg-loader.show { opacity: 1; }
+body.dark #bg-loader { background: rgba(0,0,0,0.7); color: #ccc; }
+
+/* 背景刷新按钮 */
+.bg-refresh-btn {
+  float: left;
+  margin-left: 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 20px;
+  opacity: 0.7;
+  transition: opacity 0.2s, transform 0.4s;
+}
+.bg-refresh-btn:hover { opacity: 1; transform: rotate(180deg); }
+
 /* 顶栏：纯色，无毛玻璃，无实时合成 */
 .headerBar {
   padding: 12px 24px;
@@ -70,7 +139,8 @@ body {
   text-align: center;
   padding: 80px 20px 60px;
 }
-.hero h1 { font-size: 36px; margin-bottom: 12px; }
+.hero h1 { font-size: 36px; margin-bottom: 12px; text-shadow: 0 1px 3px rgba(255,255,255,0.8); }
+body.dark .hero h1 { text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
 .hero p { color: #666; font-size: 16px; }
 
 /* 卡片区：老浏览器 inline-block 居中，现代浏览器 flex */
@@ -318,6 +388,15 @@ body.dark .copy-email-btn:hover { background: #7FB3D5; color: #111; }
 </head>
 <body>
 
+<!-- 动态背景层 -->
+<div id="bg-layer">
+  <img id="bg-image" src="" alt="">
+  <div id="bg-overlay"></div>
+</div>
+
+<!-- 背景加载指示器 -->
+<div id="bg-loader">📷 加载背景中...</div>
+
 <!-- 老 IE 升级提示，现代浏览器完全忽略 -->
 <!--[if lte IE 8]>
 <div class="ie-warning">
@@ -334,6 +413,7 @@ body.dark .copy-email-btn:hover { background: #7FB3D5; color: #111; }
 <div class="headerBar">
   <div class="logo">MDY's page</div>
   <button class="themeBtn" id="themeBtn" title="切换主题">🌙</button>
+  <button class="bg-refresh-btn" id="bgRefreshBtn" title="换一张背景">📷</button>
 </div>
 
 <div class="page">
@@ -477,11 +557,58 @@ body.dark .copy-email-btn:hover { background: #7FB3D5; color: #111; }
     };
   }
 })();
+
+/* ===== 新增：动态背景加载 ===== */
+(function () {
+  var bgImg = document.getElementById('bg-image');
+  var bgLoader = document.getElementById('bg-loader');
+  var bgRefreshBtn = document.getElementById('bgRefreshBtn');
+  var apiUrl = 'https://api.yppp.net/api.php';
+  if (!bgImg) return;
+
+  function loadBg(showLoader) {
+    if (showLoader && bgLoader) {
+      bgLoader.classList.add('show');
+    }
+    // 加随机参数防缓存，确保每次拿到不同图片
+    var url = apiUrl + '?t=' + Date.now();
+    var img = new Image();
+    img.onload = function () {
+      bgImg.src = url;
+      // 等图片完全加载后再显示（触发 CSS transition）
+      setTimeout(function () {
+        bgImg.classList.add('loaded');
+      }, 100);
+      if (bgLoader) bgLoader.classList.remove('show');
+    };
+    img.onerror = function () {
+      if (bgLoader) bgLoader.classList.remove('show');
+      console.log('背景图片加载失败，使用默认渐变背景');
+    };
+    img.src = url;
+  }
+
+  // 页面加载时自动加载背景
+  window.addEventListener('load', function () {
+    loadBg(true);
+  });
+
+  // 刷新按钮
+  if (bgRefreshBtn) {
+    bgRefreshBtn.onclick = function (e) {
+      e.stopPropagation();
+      // 先淡出
+      bgImg.classList.remove('loaded');
+      setTimeout(function () { loadBg(true); }, 400);
+    };
+  }
+})();
+
 (function () {
   var el = document.getElementById('typed-text');
   if (!el) return;
   var texts = [
-    '一个热衷于捣鼓蜜汁の小代码神人',
+    '一个热衷于捣鼓蜜汁の小代码的神人',
     'Hello, I am mdy',
     'Vibe coding, 快乐加倍 ✨',
     '今天也要敲代码鸭 🦆'
