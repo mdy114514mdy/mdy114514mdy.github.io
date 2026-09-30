@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>本地小说阅读器 · 番茄风格 + Edge TTS 朗读</title>
+<style>
+:root{
+  --bg:#eef0f4; --surface:#ffffff; --surface2:#f6f7fa; --text:#262626; --sub:#8f8f96;
+  --line:#e4e6ec; --accent:#f56544; --mark:rgba(255,214,64,.55); --shadow:0 2px 18px rgba(0,0,0,.07);
+}
+body[data-theme="sepia"]{--bg:#ece5d3; --surface:#faf6ec; --surface2:#f3eddc; --text:#3e3a35; --sub:#8a8378; --line:#ddd4bd; --mark:rgba(233,196,106,.55)}
+body[data-theme="green"]{--bg:#cfe6d3; --surface:#eaf5ec; --surface2:#e0eee3; --text:#22331f; --sub:#6f8a6b; --line:#b8d3bd; --mark:rgba(168,224,132,.6)}
+body[data-theme="night"]{--bg:#16181c; --surface:#202228; --surface2:#262a31; --text:#c9ccd2; --sub:#7b808a; --line:#30343c; --mark:rgba(120,140,255,.35); --shadow:0 2px 18px rgba(0,0,0,.5)}
+body[data-theme="blue"]{--bg:#e3e9f2; --surface:#f4f7fb; --surface2:#e9eef6; --text:#333a45; --sub:#8b95a5; --line:#d4dce8; --mark:rgba(144,200,255,.5)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;overflow:hidden;transition:background .25s,color .25s}
+.screen{flex:1;display:flex;flex-direction:column;min-height:0}
+.hide{display:none!important}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:rgba(120,120,140,.35);border-radius:4px}
+
+/* ============ 背景：动态壁纸（与主页一致）+ 主题遮罩 + 噪点 ============ */
+#bg-layer{position:fixed;inset:0;z-index:-2;overflow:hidden;background:
+  radial-gradient(1200px 700px at 85% -10%,rgba(110,163,216,.18),transparent 60%),
+  radial-gradient(900px 600px at -10% 110%,rgba(58,110,165,.14),transparent 60%),
+  var(--bg)}
+body[data-theme="night"] #bg-layer{background:
+  radial-gradient(1200px 700px at 85% -10%,rgba(110,163,216,.10),transparent 60%),
+  radial-gradient(900px 600px at -10% 110%,rgba(58,110,165,.10),transparent 60%),
+  var(--bg)}
+#bg-image{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .8s}
+#bg-image.loaded{opacity:1}
+#bg-overlay{position:absolute;inset:0;background:rgba(245,247,250,.66)}
+body[data-theme="sepia"] #bg-overlay{background:rgba(236,229,211,.68)}
+body[data-theme="green"] #bg-overlay{background:rgba(207,230,211,.62)}
+body[data-theme="night"] #bg-overlay{background:rgba(18,20,24,.64)}
+body[data-theme="blue"] #bg-overlay{background:rgba(227,233,242,.66)}
+#bg-loader{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:30;background:var(--surface);color:var(--sub);border:1px solid var(--line);padding:8px 18px;border-radius:999px;opacity:0;pointer-events:none;transition:.3s;box-shadow:var(--shadow)}
+#bg-loader.show{opacity:1}
+#bg-layer::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E")}
+.shelf-note{background:color-mix(in srgb,var(--surface) 76%,transparent);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:12px;padding:7px 16px;margin:10px 22px;display:inline-block;max-width:calc(100% - 44px)}
+.empty{text-shadow:0 1px 10px rgba(15,20,28,.35)}
+body[data-theme="night"] .empty{text-shadow:0 1px 10px rgba(0,0,0,.6)}
+
+/* ============ 书架 ============ */
+.shelf-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 22px;background:var(--surface);border-bottom:1px solid var(--line)}
+.shelf-head h1{font-size:20px;display:flex;align-items:center;gap:8px}
+.shelf-head h1 .logo{color:var(--accent)}
+.shelf-actions{display:flex;gap:10px}
+.btn{border-radius:999px;padding:8px 18px;font-size:14px;background:var(--accent);color:#fff;display:inline-flex;align-items:center;gap:6px;transition:opacity .2s,transform .15s}
+.btn:hover{opacity:.9}
+.btn:active{transform:scale(.97)}
+.btn.ghost{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
+.shelf-note{padding:8px 22px;color:var(--sub);font-size:12px;background:var(--bg)}
+.book-grid{flex:1;overflow-y:auto;padding:20px 22px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;align-content:start}
+.book-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);cursor:pointer;transition:transform .18s,box-shadow .18s;display:flex;flex-direction:column;gap:8px;position:relative}
+.book-card:hover{transform:translateY(-3px);box-shadow:0 8px 26px rgba(0,0,0,.12)}
+.book-cover{width:52px;height:68px;border-radius:8px;background:linear-gradient(140deg,var(--accent),#f7a64a);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;box-shadow:0 4px 12px rgba(245,101,68,.35)}
+.book-name{font-size:15.5px;font-weight:600;line-height:1.4}
+.book-meta{font-size:12px;color:var(--sub)}
+.book-card .del{position:absolute;top:10px;right:12px;color:var(--sub);font-size:13px;padding:4px 8px;border-radius:8px;display:none}
+.book-card:hover .del{display:block}
+.book-card .del:hover{color:#e5484d;background:rgba(229,72,77,.1)}
+.empty{grid-column:1/-1;text-align:center;color:var(--sub);padding:60px 0;font-size:14px;line-height:2}
+
+/* ============ 阅读器 ============ */
+#reader{position:relative;flex:1;display:flex;flex-direction:column;min-height:0}
+.topbar{display:flex;align-items:center;gap:8px;height:50px;padding:0 12px;background:var(--surface);border-bottom:1px solid var(--line);flex-shrink:0;overflow-x:auto;white-space:nowrap}
+.tb-btn{font-size:14px;padding:6px 9px;border-radius:9px;display:inline-flex;align-items:center;gap:5px}
+.tb-btn:hover{background:rgba(127,127,140,.1)}
+.tb-btn.speak{background:var(--accent);color:#fff;border-radius:999px;padding:6px 16px;font-weight:600}
+.tb-btn.speak.on{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
+.book-title{font-weight:600;font-size:14.5px;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.sp{flex:1}
+.tb-group{display:flex;align-items:center;gap:4px;font-size:12.5px;color:var(--sub);padding:0 6px}
+.tb-group b{color:var(--text);min-width:20px;text-align:center;font-variant-numeric:tabular-nums}
+.icon-btn{width:26px;height:26px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--text);display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+.icon-btn:hover{border-color:var(--accent);color:var(--accent)}
+.dot{width:17px;height:17px;border-radius:50%;cursor:pointer;border:2px solid transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.dot.active{border-color:var(--accent);transform:scale(1.12)}
+select.tb-sel{border:1px solid var(--line);border-radius:8px;background:var(--surface2);color:var(--text);font-size:12.5px;padding:4px 6px;outline:none;max-width:150px}
+
+.catalog{position:absolute;top:50px;bottom:0;left:0;width:285px;background:var(--surface);border-right:1px solid var(--line);overflow-y:auto;z-index:30;transform:translateX(-105%);transition:transform .22s;box-shadow:3px 0 16px rgba(0,0,0,.1)}
+.catalog.open{transform:none}
+.cat-head{position:sticky;top:0;padding:12px 18px;font-size:13px;color:var(--sub);background:var(--surface);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;z-index:2}
+.cat-item{padding:9px 18px;font-size:13px;color:var(--sub);cursor:pointer;border-left:3px solid transparent;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cat-item:hover{color:var(--text);background:rgba(127,127,140,.08)}
+.cat-item.active{color:var(--accent);border-left-color:var(--accent);background:rgba(245,101,68,.07);font-weight:600}
+
+.reading{flex:1;overflow-y:auto;display:flex;justify-content:center;padding:14px}
+.book-page{width:min(100%,var(--page-w,780px));background:var(--surface);padding:36px 46px 70px;border-radius:12px;box-shadow:var(--shadow);align-self:flex-start}
+.chapter-title{font-size:1.45em;font-weight:700;text-align:center;margin-bottom:1.5em;letter-spacing:.06em}
+.chapter-title small{display:block;font-size:.55em;font-weight:400;color:var(--sub);letter-spacing:.02em;margin-top:6px}
+.para{font-size:var(--fs,17px);line-height:1.9;text-align:justify;text-indent:2em;margin:0 0 .9em;border-radius:4px;transition:background .15s}
+.para.hl-line{background:var(--mark);box-shadow:0 0 0 3px var(--mark)}
+mark.cur{background:var(--mark);color:inherit;border-radius:3px}
+.chap-nav{display:flex;align-items:center;justify-content:center;gap:18px;padding:10px 0;background:var(--surface);border-top:1px solid var(--line);flex-shrink:0;font-size:13px;color:var(--sub)}
+.chap-nav button{font-size:13.5px;color:var(--text);padding:7px 18px;border-radius:999px;border:1px solid var(--line);background:var(--surface2)}
+.chap-nav button:hover{border-color:var(--accent);color:var(--accent)}
+.chap-nav button:disabled{opacity:.35;cursor:not-allowed}
+
+/* toast */
+#toast{position:fixed;left:50%;bottom:44px;transform:translate(-50%,20px);opacity:0;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);color:var(--text);padding:10px 20px;border-radius:999px;font-size:13.5px;z-index:99;transition:.25s;pointer-events:none;max-width:86vw}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+@media(max-width:640px){
+  .book-page{padding:22px 20px 40px;border-radius:8px}
+  .topbar{gap:4px}
+  .tb-group span.label{display:none}
+  .cat-item{padding:10px 16px}
+}
+</style>
+</head>
+<body>
+<div id="bg-layer" aria-hidden="true">
+  <img id="bg-image" alt="">
+  <div id="bg-overlay"></div>
+</div>
+<div id="bg-loader">正在加载背景…</div>
+
+<!-- ============ 书架 ============ -->
+<div id="shelf" class="screen">
+  <div class="shelf-head">
+    <h1><span class="logo">📖</span> 本地小说阅读器</h1>
+    <div class="shelf-actions">
+      <label class="btn">📤 上传 TXT 小说
+        <input type="file" id="fileInput" accept=".txt,text/plain" hidden>
+      </label>
+      <button class="btn ghost" id="btnSettings">⚙ 设置</button>
+    </div>
+  </div>
+  <div class="shelf-note">TXT 自动分章（第X章/回/卷…），朗读走 Edge TTS（需联网），声音：zh-CN-XiaoyiNeural，读到哪一行就高亮哪一行。</div>
+  <div class="book-grid" id="bookGrid"></div>
+</div>
+
+<!-- ============ 阅读器 ============ -->
+<div id="reader" class="screen hide">
+  <div class="topbar">
+    <button class="tb-btn" id="btnCatalog" title="目录">☰ 目录</button>
+    <span class="book-title" id="bookTitle"></span>
+    <button class="tb-btn" id="bgBtn" title="换一张背景">❖</button>
+    <div class="sp"></div>
+    <div class="tb-group"><span class="label">配色</span>
+      <div class="color-dots" id="colorDots"></div>
+    </div>
+    <div class="tb-group"><span class="label">字号</span>
+      <button class="icon-btn" id="fontMinus" title="减小字号">−</button><b id="fontVal">17</b>
+      <button class="icon-btn" id="fontPlus" title="增大字号">+</button>
+    </div>
+    <div class="tb-group"><span class="label">宽度</span>
+      <button class="icon-btn" id="widthMinus" title="减小页宽">−</button><b id="widthVal">780</b>
+      <button class="icon-btn" id="widthPlus" title="增大页宽">+</button>
+    </div>
+    <div class="tb-group"><span class="label">声音</span>
+      <select class="tb-sel" id="voiceSel"></select>
+    </div>
+    <div class="tb-group"><span class="label">语速</span>
+      <select class="tb-sel" id="rateSel">
+        <option value="-50%">慢速 0.5x</option>
+        <option value="-25%">较慢 0.75x</option>
+        <option value="+0%" selected>正常 1.0x</option>
+        <option value="+25%">较快 1.25x</option>
+        <option value="+50%">快速 1.5x</option>
+      </select>
+    </div>
+    <button class="tb-btn speak" id="btnSpeak">🔊 朗读</button>
+    <button class="tb-btn speak on hide" id="btnStop">⏹ 停止</button>
+    <button class="tb-btn" id="btnBack" title="返回书架">🏠</button>
+  </div>
+
+  <div class="catalog" id="catalog">
+    <div class="cat-head"><span>目录</span><button class="icon-btn" id="catClose">✕</button></div>
+    <div id="catalogList"></div>
+  </div>
+
+  <div class="reading" id="reading">
+    <div class="book-page" id="bookPage">
+      <div class="chapter-title" id="chapterTitle"></div>
+      <div id="chapterBody"></div>
+    </div>
+  </div>
+
+  <div class="chap-nav">
+    <button id="btnPrev">← 上一章</button>
+    <span id="chapIdx"></span>
+    <button id="btnNext">下一章 →</button>
+  </div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script>
+/* ================= 工具 ================= */
+const $=s=>document.querySelector(s);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function uuid(){ if(crypto.randomUUID)return crypto.randomUUID(); return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&0x3|0x8)).toString(16)}); }
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function escXml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');}
+function cleanTTS(s){return [...s].map(c=>{const code=c.codePointAt(0);if((0<=code&&code<=8)||(11<=code&&code<=12)||(14<=code&&code<=31))return ' ';return c;}).join('');}
+let toastTimer;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2600);}
+
+/* ================= 设置持久化 ================= */
+const DEFAULT={theme:'white',fs:17,pw:780,voice:'zh-CN-XiaoyiNeural',rate:'+0%'};
+let SET=Object.assign({},DEFAULT);
+try{SET=Object.assign({},DEFAULT,JSON.parse(localStorage.getItem('txtreader.set')||'{}'));}catch(e){}
+function saveSet(){try{localStorage.setItem('txtreader.set',JSON.stringify(SET));}catch(e){}}
+
+/* ================= IndexedDB 书架 ================= */
+function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open('txtreader',1);r.onupgradeneeded=e=>{const db=e.target.result;if(!db.objectStoreNames.contains('books'))db.createObjectStore('books',{keyPath:'name'});};r.onsuccess=e=>res(e.target.result);r.onerror=e=>rej(e.target.error);});}
+function idbPut(book){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction('books','readwrite');tx.objectStore('books').put(book);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);}));}
+function idbAll(){return idbOpen().then(db=>new Promise((res,rej)=>{const r=db.transaction('books').objectStore('books').getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error);}));}
+function idbDel(name){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction('books','readwrite');tx.objectStore('books').delete(name);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);}));}
+
+/* ================= TXT 解析 ================= */
+async function readTxt(file){
+  const buf=await file.arrayBuffer();
+  let text=null,enc='utf-8';
+  for(const e of ['utf-8','gb18030']){ try{ text=new TextDecoder(e,{fatal:true}).decode(buf); enc=e; break; }catch(err){} }
+  if(text==null){ text=new TextDecoder('utf-8',{fatal:false}).decode(buf); enc='utf-8'; }
+  return {text,enc};
+}
+const CHAP_RE=/^\s*第\s*[0-9０-９一二三四五六七八九十百千万零〇两]{1,8}\s*[章节回卷集部篇话幕].{0,20}$/;
+const ALT_RE=/^\s*(?:序章|楔子|序言|前言|尾声|后记|番外|大结局|最终章).{0,20}$/;
+function splitChapters(text){
+  const lines=text.split(/\r?\n/);
+  const chapters=[];let cur={title:'正文',lines:[]};
+  for(const line of lines){
+    const t=line.trim();
+    if(t && t.length<=40 && !/[。！？…]/.test(t) && (CHAP_RE.test(t)||ALT_RE.test(t))){ chapters.push(cur);cur={title:t,lines:[]}; }
+    else if(t) cur.lines.push(line);
+  }
+  chapters.push(cur);
+  // 过滤空章（含文件头部的默认「正文」）
+  const out=chapters.filter(c=>c.title||c.lines.some(l=>l.trim()));
+  if(out.length>1 && out[0].lines.length===0 && (out[0].title==='正文'||!out[0].title)) out.shift();
+  return out;
+}
+
+/* ================= Edge TTS（zh-CN 声音） ================= */
+const VOICES=['zh-CN-XiaoyiNeural','zh-CN-XiaoxiaoNeural','zh-CN-YunxiNeural','zh-CN-YunjianNeural','zh-CN-YunyangNeural','zh-CN-liaoning-XiaobeiNeural','zh-CN-shaanxi-XiaoniNeural'];
+const TTS_BASE='wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=6A5AA1D4EAFF4E9FB37E23D68491D6F4&ConnectionId=';
+const GEC_VERSION='1-143.0.3650.75';
+function tsStr(){const d=new Date();const W=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const p=n=>String(n).padStart(2,'0');
+  return `${W[d.getUTCDay()]} ${M[d.getUTCMonth()]} ${p(d.getUTCDate())} ${d.getUTCFullYear()} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())} GMT+0000 (Coordinated Universal Time)`;}
+function generateSecMsGec(){
+  const TOKEN='6A5AA1D4EAFF4E9FB37E23D68491D6F4',WIN_EPOCH=11644473600;
+  let ticks=Date.now()/1000+WIN_EPOCH;
+  ticks-=ticks%300;
+  ticks*=1e7;
+  const str=`${Math.floor(ticks)}${TOKEN}`;
+  return crypto.subtle.digest('SHA-256',new TextEncoder().encode(str)).then(h=>{
+    const a=new Uint8Array(h);let s='';
+    for(let i=0;i<a.length;i++)s+=a[i].toString(16).padStart(2,'0');
+    return s.toUpperCase();
+  });
+}
+class EdgeTTS{
+  constructor(){this.ws=null;}
+  open(){
+    if(this.ws){
+      if(this.ws.readyState===WebSocket.OPEN) return Promise.resolve();
+      if(this.ws.readyState===WebSocket.CONNECTING){
+        // 等待连接就绪，避免 send 过早
+        return new Promise((res,rej)=>{
+          const chk=setInterval(()=>{
+            if(this.ws.readyState===WebSocket.OPEN){clearInterval(chk);res();}
+            else if(this.ws.readyState===WebSocket.CLOSING||this.ws.readyState===WebSocket.CLOSED){clearInterval(chk);this.ws=null;rej(new Error('TTS 连接已关闭'));}
+          },40);
+        });
+      }
+    }
+    return generateSecMsGec().then(gec=>{
+      const ws=new WebSocket(TTS_BASE+uuid()+'&Sec-MS-GEC='+gec+'&Sec-MS-GEC-Version='+GEC_VERSION);
+      this.ws=ws;
+      ws.onmessage=(ev)=>this.onMessage(ev,ws);
+      return new Promise((res,rej)=>{
+        const t=setTimeout(()=>rej(new Error('TTS 连接超时')),8000);
+        ws.onopen=()=>{
+          const cfg=`X-Timestamp:${tsStr()}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n{"context":{"synthesis":{"audio":{"metadataoptions":{"sentenceBoundaryEnabled":"true","wordBoundaryEnabled":"false"},"outputFormat":"audio-24khz-48kbitrate-mono-mp3"}}}}\r\n`;
+          try{ws.send(cfg);}catch(e){}
+          clearTimeout(t);res();
+        };
+        ws.onerror=()=>{clearTimeout(t);rej(new Error('TTS 连接失败'));};
+        ws.onclose=()=>{
+          clearTimeout(t);
+          if(ws._ctx){const c=ws._ctx;ws._ctx=null;c.reject(new Error('TTS 连接已关闭'));}
+          if(this.ws===ws)this.ws=null;
+        };
+      });
+    });
+  }
+  onMessage(ev,ws){
+    const read=async()=>{
+      let bytes;
+      if(typeof ev.data==='string') bytes=new TextEncoder().encode(ev.data);
+      else bytes=new Uint8Array(await ev.data.arrayBuffer());
+      let head='',body=new Uint8Array(0);
+      if(typeof ev.data==='string'){
+        // 文本帧：\r\n\r\n 分隔
+        let sep=-1;
+        for(let i=0;i<bytes.length-3;i++){ if(bytes[i]===13&&bytes[i+1]===10&&bytes[i+2]===13&&bytes[i+3]===10){sep=i;break;} }
+        if(sep>0){head=new TextDecoder().decode(bytes.subarray(0,sep));body=bytes.subarray(sep+4);}
+      }else{
+        // 二进制音频帧：前 2 字节为大端「头部长度」（含 2 字节前缀），正文从 hl+2 开始
+        if(bytes.length<2)return;
+        const hl=(bytes[0]<<8)|bytes[1];
+        head=new TextDecoder().decode(bytes.subarray(0,hl));
+        body=bytes.subarray(hl+2);
+      }
+      let path='';
+      for(const ln of head.split('\r\n')){const k=ln.indexOf(':');if(k>0&&ln.slice(0,k).trim()==='Path')path=ln.slice(k+1).trim();}
+      const ctx=ws._ctx;
+      if(!ctx)return;
+      if(path==='audio'){ctx.bytes.push(body);}
+      else if(path==='turn.end'){
+        const blob=new Blob(ctx.bytes,{type:'audio/mpeg'});
+        ws._ctx=null;
+        ctx.resolve(blob);
+        // 一句播完断开，下一句重新连接（与官方实现一致）
+        try{ws.close();}catch(e){}
+        if(this.ws===ws)this.ws=null;
+      }else if(path==='error'){
+        ws._ctx=null;
+        ctx.reject(new Error('TTS 服务返回错误'));
+      }
+    };
+    read().catch(()=>{});
+  }
+  synthesize(text,voice,rate){
+    return this.open().then(()=>new Promise((resolve,reject)=>{
+      const rid=uuid();
+      this.ws._ctx={bytes:[],resolve,reject,rid};
+      const ssml=`<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='${voice}'><prosody pitch='+0Hz' rate='${rate}' volume='+0%'>${escXml(cleanTTS(text))}</prosody></voice></speak>`;
+      const msg=`X-RequestId:${rid}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${tsStr()}Z\r\nPath:ssml\r\n\r\n${ssml}`;
+      this.ws.send(msg);
+    }));
+  }
+}
+const tts=new EdgeTTS();
+
+/* ================= 全局状态 ================= */
+let BOOK=null,CHS=[],CH=0;
+let paraEls=[],curParaEl=null;
+let readerRunning=false,stopToken=0;
+const audio=new Audio();audio.preload='auto';
+
+/* ================= 主题 / 字号 / 宽度 ================= */
+const THEMES=[{id:'white',c:'#ffffff'},{id:'sepia',c:'#f5efdc'},{id:'green',c:'#cce8cf'},{id:'night',c:'#1e1e1e'},{id:'blue',c:'#e3e9f2'}];
+function applyTheme(){document.body.dataset.theme=SET.theme;document.querySelectorAll('#colorDots .dot').forEach(d=>d.classList.toggle('active',d.dataset.t===SET.theme));}
+function applyFS(){document.documentElement.style.setProperty('--fs',SET.fs+'px');$('#fontVal').textContent=SET.fs;}
+function applyPW(){document.documentElement.style.setProperty('--page-w',SET.pw+'px');$('#widthVal').textContent=SET.pw;}
+function buildDots(){const box=$('#colorDots');box.innerHTML='';THEMES.forEach(t=>{const d=document.createElement('button');d.className='dot';d.dataset.t=t.id;d.title=t.id;d.style.background=t.c;d.onclick=()=>{SET.theme=t.id;saveSet();applyTheme();};box.appendChild(d);});}
+function buildVoices(){const sel=$('#voiceSel');sel.innerHTML='';VOICES.forEach(v=>sel.appendChild(new Option(v,v)));sel.value=SET.voice;}
+
+/* ================= 背景（与主页同款动态壁纸，每切一章换一张） ================= */
+function refreshBg(){
+  const img=$('#bg-image'),load=$('#bg-loader');
+  load.classList.add('show');
+  const u='https://api.yppp.net/api.php?t='+Date.now();
+  const p=new Image();
+  p.onload=()=>{img.src=u;img.classList.add('loaded');load.classList.remove('show');};
+  p.onerror=()=>{load.classList.remove('show');img.classList.remove('loaded');};
+  p.src=u;
+}
+
+/* ================= 章节渲染 ================= */
+function renderChapter(i){
+  stopReading();
+  refreshBg();
+  CH=Math.max(0,Math.min(i,CHS.length-1));
+  const ch=CHS[CH];
+  $('#chapterTitle').innerHTML=escHtml(ch.title)+'<small>'+escHtml(BOOK.name)+' · 第'+(CH+1)+'/'+CHS.length+'章</small>';
+  const body=$('#chapterBody');body.innerHTML='';
+  paraEls=[];
+  for(const line of ch.lines){
+    const t=line.trim();
+    if(!t)continue;
+    const p=document.createElement('p');p.className='para';p.textContent=t;p._plain=t;
+    body.appendChild(p);paraEls.push(p);
+  }
+  if(!paraEls.length){const p=document.createElement('p');p.className='para';p.textContent='（本章无内容）';body.appendChild(p);paraEls.push(p);}
+  $('#chapIdx').textContent='第 '+(CH+1)+' / '+CHS.length+' 章';
+  $('#btnPrev').disabled=CH===0;$('#btnNext').disabled=CH===CHS.length-1;
+  renderCatalog();updateCatActive();saveProgress();
+  $('#reading').scrollTop=0;
+  const pos=BOOK.position&&BOOK.position.ch===CH?BOOK.position.para:0;
+  if(pos>0&&paraEls[pos])setTimeout(()=>paraEls[pos].scrollIntoView({block:'start'}),50);
+}
+
+function renderCatalog(){
+  const list=$('#catalogList');list.innerHTML='';
+  CHS.forEach((ch,i)=>{
+    const d=document.createElement('div');d.className='cat-item';d.textContent=ch.title;d.dataset.i=i;
+    d.onclick=()=>{renderChapter(i);$('#catalog').classList.remove('open');};
+    list.appendChild(d);
+  });
+}
+function updateCatActive(){
+  document.querySelectorAll('#catalogList .cat-item').forEach(d=>d.classList.toggle('active',+d.dataset.i===CH));
+}
+
+/* ================= 进度 ================= */
+let saveTimer=null;
+function saveProgress(){
+  if(!BOOK)return;
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    const r=$('#reading').getBoundingClientRect();
+    let idx=0;
+    for(let k=0;k<paraEls.length;k++){const t=paraEls[k].getBoundingClientRect();if(t.bottom>r.top+8){idx=k;break;}}
+    BOOK.position={ch:CH,para:idx};
+    idbPut(BOOK).catch(()=>{});
+  },500);
+}
+$('#reading').addEventListener('scroll',saveProgress,{passive:true});
+
+/* ================= 朗读（Edge TTS + 行高亮） ================= */
+function splitSentences(text){
+  const res=[];
+  const re=/(?:[^。！？…!?；;]+[。！？…!?；;]?)/g;let m;
+  while((m=re.exec(text))){const s=m[0].trim();if(s)res.push(s);}
+  const out=[];
+  for(const s of res){ if(s.length<=150){out.push(s);} else { const re2=/(?:[^，,；;、]+[，,；;、]?)/g;let m2,part=''; while((m2=re2.exec(s))){part+=m2[0];if(part.length>=100||m2.index+m2[0].length>=s.length){out.push(part.trim());part='';}} if(part.trim())out.push(part.trim()); } }
+  return out.filter(s=>s.length>0);
+}
+function buildSentenceList(){
+  const list=[];
+  paraEls.forEach((el,i)=>{for(const s of splitSentences(el._plain))list.push({text:s,paraIdx:i});});
+  return list;
+}
+function firstVisiblePara(){
+  const r=$('#reading').getBoundingClientRect();
+  for(let k=0;k<paraEls.length;k++){const t=paraEls[k].getBoundingClientRect();if(t.bottom>r.top+6&&t.top<r.bottom)return k;}
+  return 0;
+}
+function highlightSent(s){
+  unhighlight();
+  const el=paraEls[s.paraIdx];if(!el)return;
+  el.classList.add('hl-line');
+  const idx=el._plain.indexOf(s.text);
+  if(idx>=0){ el.innerHTML=escHtml(el._plain.slice(0,idx))+'<mark class="cur">'+escHtml(s.text)+'</mark>'+escHtml(el._plain.slice(idx+s.text.length)); }
+  curParaEl=el;
+  const t=el.getBoundingClientRect(),r=$('#reading').getBoundingClientRect();
+  if(t.top<r.top+70||t.bottom>r.bottom-70) el.scrollIntoView({block:'center',behavior:'smooth'});
+}
+function unhighlight(){
+  if(!curParaEl)return;
+  curParaEl.classList.remove('hl-line');
+  if(curParaEl._plain!==undefined)curParaEl.textContent=curParaEl._plain;
+  curParaEl=null;
+}
+function playBlob(blob){return new Promise(res=>{audio.src=URL.createObjectURL(blob);audio.onended=res;audio.onerror=res;audio.play().catch(res);});}
+async function pump(list,start,token){
+  let i=start;
+  while(i<list.length&&token===stopToken){
+    const s=list[i++];
+    highlightSent(s);
+    let blob;
+    try{blob=await tts.synthesize(s.text,SET.voice,SET.rate);}
+    catch(e){toast('TTS 失败：'+e.message);break;}
+    if(token!==stopToken)break;
+    await playBlob(blob);
+    unhighlight();
+  }
+  if(token===stopToken){toast('本章朗读完毕');stopReading();}
+}
+async function startReading(){
+  if(readerRunning){stopReading();return;}
+  const list=buildSentenceList();
+  if(!list.length){toast('本章没有可朗读的内容');return;}
+  readerRunning=true;
+  $('#btnSpeak').classList.add('hide');$('#btnStop').classList.remove('hide');
+  $('#btnSpeak').textContent='🔊 跟读中';
+  const start=list.findIndex(s=>s.paraIdx>=firstVisiblePara());
+  const token=++stopToken;
+  await pump(list,Math.max(0,start),token);
+}
+function stopReading(){
+  stopToken++;
+  readerRunning=false;
+  audio.pause();
+  unhighlight();
+  $('#btnSpeak').classList.remove('hide');$('#btnStop').classList.add('hide');
+  $('#btnSpeak').textContent='🔊 朗读';
+}
+
+/* ================= 书架 ================= */
+function renderShelf(){
+  const grid=$('#bookGrid');
+  idbAll().then(books=>{
+    if(!books.length){grid.innerHTML='<div class="empty">书架空空如也～<br>点击右上角「上传 TXT 小说」，或把 .txt 文件拖到窗口里<br><br><span style="color:var(--sub)">支持 UTF-8 / GBK 编码，自动识别「第X章」分章</span></div>';return;}
+    grid.innerHTML='';
+    books.sort((a,b)=>(b.updated||0)-(a.updated||0));
+    books.forEach(b=>{
+      const card=document.createElement('div');card.className='book-card';
+      const pct=b.position&&b.position.ch!==undefined?(b.position.ch+1)+'/'+(b.chapters||0):'未开始';
+      card.innerHTML='<div class="book-cover">📕</div><div class="book-name">'+escHtml(b.name)+'</div>'+
+        '<div class="book-meta">'+(b.chapters||0)+' 章 · 读到 '+escHtml(String(pct))+'</div>'+
+        '<div class="book-meta">'+Math.round((b.text||'').length/10000)/100+' 万字 · '+b.enc+'</div>'+
+        '<div class="del" title="删除">✕</div>';
+      card.querySelector('.del').onclick=e=>{e.stopPropagation();if(confirm('删除《'+b.name+'》？')){idbDel(b.name).then(renderShelf);}};
+      card.onclick=()=>openBook(b.name);
+      grid.appendChild(card);
+    });
+  }).catch(e=>{grid.innerHTML='<div class="empty">书架读取失败：'+escHtml(e.message)+'</div>';});
+}
+async function openBook(name){
+  const books=await idbAll();
+  const b=books.find(x=>x.name===name);if(!b)return;
+  BOOK=b;CHS=b.chapters;
+  $('#bookTitle').textContent=b.name;
+  $('#shelf').classList.add('hide');$('#reader').classList.remove('hide');
+  renderChapter(b.position&&b.position.ch!==undefined?b.position.ch:0);
+}
+async function importFile(file){
+  if(!/\.txt$/i.test(file.name)&&!file.type.includes('text'))toast('请选择 .txt 文件');else{
+    toast('正在解析 '+file.name+' …');
+    try{
+      const {text,enc}=await readTxt(file);
+      const chs=splitChapters(text);
+      const book={name:file.name.replace(/\.txt$/i,''),text,chapters:chs,enc,updated:Date.now(),position:{ch:0,para:0}};
+      await idbPut(book);
+      toast('导入成功：共 '+chs.length+' 章');
+      renderShelf();openBook(book.name);
+    }catch(e){toast('解析失败：'+e.message);}
+  }
+}
+
+/* ================= 事件 ================= */
+$('#fileInput').addEventListener('change',e=>{if(e.target.files[0])importFile(e.target.files[0]);e.target.value='';});
+let dragCounter=0;
+document.addEventListener('dragover',e=>{e.preventDefault();});
+document.addEventListener('dragenter',e=>{e.preventDefault();dragCounter++;toast('松开鼠标上传 TXT');});
+document.addEventListener('dragleave',()=>{dragCounter--;});
+document.addEventListener('drop',e=>{e.preventDefault();dragCounter=0;const f=[...e.dataTransfer.files].find(f=>/\.txt$/i.test(f.name));if(f)importFile(f);});
+$('#btnCatalog').onclick=()=>$('#catalog').classList.toggle('open');
+$('#catClose').onclick=()=>$('#catalog').classList.remove('open');
+$('#btnBack').onclick=()=>{stopReading();$('#reader').classList.add('hide');$('#shelf').classList.remove('hide');renderShelf();};
+$('#btnPrev').onclick=()=>{if(CH>0)renderChapter(CH-1);};
+$('#btnNext').onclick=()=>{if(CH<CHS.length-1)renderChapter(CH+1);};
+$('#fontMinus').onclick=()=>{SET.fs=Math.max(14,SET.fs-1);saveSet();applyFS();};
+$('#fontPlus').onclick=()=>{SET.fs=Math.min(26,SET.fs+1);saveSet();applyFS();};
+$('#widthMinus').onclick=()=>{SET.pw=Math.max(520,SET.pw-20);saveSet();applyPW();};
+$('#widthPlus').onclick=()=>{SET.pw=Math.min(1280,SET.pw+20);saveSet();applyPW();};
+$('#voiceSel').addEventListener('change',e=>{SET.voice=e.target.value;saveSet();});
+$('#rateSel').addEventListener('change',e=>{SET.rate=e.target.value;saveSet();});
+$('#btnSpeak').onclick=startReading;
+$('#btnStop').onclick=stopReading;
+document.addEventListener('keydown',e=>{
+  if($('#reader').classList.contains('hide'))return;
+  if(e.key==='Escape')$('#catalog').classList.remove('open');
+});
+
+/* ================= 启动 ================= */
+buildDots();buildVoices();
+applyTheme();applyFS();applyPW();
+refreshBg();
+renderShelf();
+$('#bgBtn').onclick=refreshBg;
+</script>
+</body>
+</html>
