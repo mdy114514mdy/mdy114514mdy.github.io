@@ -275,6 +275,8 @@ class EdgeTTS{
     }
     return generateSecMsGec().then(gec=>{
       const ws=new WebSocket(TTS_BASE+uuid()+'&Sec-MS-GEC='+gec+'&Sec-MS-GEC-Version='+GEC_VERSION);
+      ws.binaryType='arraybuffer';   // 音频帧必须同步解析：Blob 的 arrayBuffer() 是异步的，会让帧乱序、甚至丢帧
+      ws._q=Promise.resolve();       // 帧处理串行队列，保证 turn.end 不会抢在音频帧之前结算
       this.ws=ws;
       ws.onmessage=(ev)=>this.onMessage(ev,ws);
       return new Promise((res,rej)=>{
@@ -294,10 +296,14 @@ class EdgeTTS{
     });
   }
   onMessage(ev,ws){
-    const read=async()=>{
+    // 串行处理：即使某一帧的解析是异步的，后面的帧（含 turn.end）也会等它做完
+    ws._q=ws._q.then(()=>this.handleFrame(ev,ws)).catch(()=>{});
+  }
+  async handleFrame(ev,ws){
       let bytes;
       if(typeof ev.data==='string') bytes=new TextEncoder().encode(ev.data);
-      else bytes=new Uint8Array(await ev.data.arrayBuffer());
+      else if(ev.data instanceof ArrayBuffer) bytes=new Uint8Array(ev.data);   // binaryType=arraybuffer：同步解析，顺序不会乱
+      else bytes=new Uint8Array(await ev.data.arrayBuffer());                   // 兜底：万一仍是 Blob
       let head='',body=new Uint8Array(0);
       if(typeof ev.data==='string'){
         // 文本帧：\r\n\r\n 分隔
@@ -305,14 +311,16 @@ class EdgeTTS{
         for(let i=0;i<bytes.length-3;i++){ if(bytes[i]===13&&bytes[i+1]===10&&bytes[i+2]===13&&bytes[i+3]===10){sep=i;break;} }
         if(sep>0){head=new TextDecoder().decode(bytes.subarray(0,sep));body=bytes.subarray(sep+4);}
       }else{
-        // 二进制音频帧：前 2 字节为大端「头部长度」（含 2 字节前缀），正文从 hl+2 开始
+        // 二进制音频帧：前 2 字节为大端「头文本长度」hl，头文本 = bytes[2 .. hl+2)，音频 = bytes[hl+2 ..)
         if(bytes.length<2)return;
         const hl=(bytes[0]<<8)|bytes[1];
-        head=new TextDecoder().decode(bytes.subarray(0,hl));
-        body=bytes.subarray(hl+2);
+        const hEnd=Math.min(bytes.length,hl+2);
+        head=new TextDecoder().decode(bytes.subarray(2,hEnd));
+        body=bytes.subarray(hEnd);
       }
       let path='';
-      for(const ln of head.split('\r\n')){const k=ln.indexOf(':');if(k>0&&ln.slice(0,k).trim()==='Path')path=ln.slice(k+1).trim();}
+      const pm=/(?:^|\r\n)Path:\s*([^\r\n]+)/.exec(head);
+      if(pm)path=pm[1].trim();
       const ctx=ws._ctx;
       if(!ctx)return;
       if(path==='audio'){ctx.bytes.push(body);}
@@ -327,8 +335,6 @@ class EdgeTTS{
         ws._ctx=null;
         ctx.reject(new Error('TTS 服务返回错误'));
       }
-    };
-    read().catch(()=>{});
   }
   synthesize(text,voice,rate){
     return this.open().then(()=>new Promise((resolve,reject)=>{
@@ -453,7 +459,18 @@ function unhighlight(){
   if(curParaEl._plain!==undefined)curParaEl.textContent=curParaEl._plain;
   curParaEl=null;
 }
-function playBlob(blob){return new Promise(res=>{audio.src=URL.createObjectURL(blob);audio.onended=res;audio.onerror=res;audio.play().catch(res);});}
+let playAbort=null;
+function playBlob(blob){
+  return new Promise(res=>{
+    const url=URL.createObjectURL(blob);
+    let done=false;
+    const finish=()=>{ if(done)return; done=true; playAbort=null; audio.onended=audio.onerror=null; URL.revokeObjectURL(url); res(); };
+    playAbort=finish;
+    audio.onended=finish;audio.onerror=finish;
+    audio.src=url;
+    audio.play().catch(finish);
+  });
+}
 async function pump(list,start,token){
   let i=start;
   while(i<list.length&&token===stopToken){
@@ -483,6 +500,7 @@ function stopReading(){
   stopToken++;
   readerRunning=false;
   audio.pause();
+  if(playAbort)playAbort();   // 让 pump 里等待播放结束的 await 立刻返回，避免卡死
   unhighlight();
   $('#btnSpeak').classList.remove('hide');$('#btnStop').classList.add('hide');
   $('#btnSpeak').textContent='🔊 朗读';
