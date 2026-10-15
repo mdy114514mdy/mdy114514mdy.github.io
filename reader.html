@@ -132,7 +132,7 @@ mark.cur{background:var(--mark);color:inherit;border-radius:3px}
       <button class="btn ghost" id="btnSettings">⚙ 设置</button>
     </div>
   </div>
-  <div class="shelf-note">TXT 自动分章（第X章/回/卷…），朗读走 Edge TTS（需联网），声音：zh-CN-XiaoyiNeural，读到哪一行就高亮哪一行。</div>
+  <div class="shelf-note">TXT 自动分章（第X章/回/卷…），朗读优先走 Edge TTS（需联网），连不上时自动改用系统语音（Edge 上就是晓晓 Online），读到哪一行就高亮哪一行。</div>
   <div class="book-grid" id="bookGrid"></div>
 </div>
 
@@ -348,6 +348,72 @@ class EdgeTTS{
 }
 const tts=new EdgeTTS();
 
+/* ================= 系统语音兜底（在线 TTS 连不上时用） =================
+   浏览器的 WebSocket 一定会带上页面自己的 Origin，微软的朗读网关在部分网络/时段
+   会直接回 403，这时自动改用浏览器自带的 speechSynthesis。
+   注意：Edge 里同名语音有两份，实测「Chinese (Mainland)」那份能连续朗读，
+   「(Mandarin, Simplified)」那份常常只有第一句出声、后续报 synthesis-failed，
+   所以这里给候选语音打分排序，并在报错时换下一个候选（自愈）。 */
+let ttsMode='edge',sysVoiceName=null,sysAbort=null,sysStop=false;
+const sysBad=new Set();
+function sysSupported(){return typeof speechSynthesis!=='undefined'&&typeof SpeechSynthesisUtterance!=='undefined';}
+function sysScore(v){
+  let s=v.localService?100:0;                       // 离线语音最稳
+  if(/Mainland|大陆/i.test(v.name))s+=50;
+  if(/Xiaoxiao|晓晓/i.test(v.name))s+=30;
+  if(/Xiaoyi|晓伊|Yunxi|云希/i.test(v.name))s+=20;
+  if(/zh[-_]CN/i.test(v.lang))s+=15;
+  if(/Traditional|Cantonese|Hong Kong|Taiwan|香港|台湾|粤|曉|雲/i.test(v.name+' '+v.lang))s-=45;
+  return s;
+}
+function sysCands(){
+  if(!sysSupported())return [];
+  return (speechSynthesis.getVoices()||[]).filter(v=>/^zh/i.test(v.lang)&&!sysBad.has(v.name)).sort((a,b)=>sysScore(b)-sysScore(a));
+}
+function sysRate(r){const m=/^([+-])(\d+)%$/.exec(r||'+0%');return m?Math.min(2,Math.max(.5,1+(m[1]==='-'?-1:1)*Number(m[2])/100)):1;}
+function speakSystem(text,rate){
+  return new Promise(res=>{
+    if(!sysSupported()){toast('这个浏览器不支持系统语音');res();return;}
+    let done=false,voice=null;
+    const fin=()=>{if(done)return;done=true;sysAbort=null;res();};
+    const go=step=>{
+      if(sysStop){fin();return;}
+      const cands=sysCands();                        // 每次都重取：Edge 的语音列表是分批加载的
+      if(!cands.length){toast('系统里没有可用的中文语音');fin();return;}
+      if(step>=cands.length||step>=4){fin();return;}
+      const v=cands[Math.max(0,Math.min(step,cands.length-1))];
+      voice=v;
+      try{
+        const u=new SpeechSynthesisUtterance(text);
+        u.lang='zh-CN';u.rate=sysRate(rate);u.voice=v;
+        let settled=false,guard=0;
+        const ok=()=>{if(settled)return;settled=true;clearTimeout(guard);sysVoiceName=v.name;sysAbort=null;fin();};
+        const bad=err=>{
+          if(settled)return;settled=true;clearTimeout(guard);
+          // 这条语音在这台机器上不行，换下一个候选再试（本轮内不再用它）
+          if(!sysStop&&step+1<Math.min(cands.length,4)&&(err==='synthesis-failed'||err==='interrupted'||err==='audio-busy')){
+            sysBad.add(v.name);sysVoiceName=null;setTimeout(()=>go(step+1),260);return;
+          }
+          fin();
+        };
+        guard=setTimeout(ok,2500+text.length*450);   // 保险：万一 onend 不触发
+        sysAbort=fin;
+        u.onend=ok;u.onerror=e=>bad(e&&e.error);
+        speechSynthesis.speak(u);
+      }catch(e){bad('synthesis-failed');}
+    };
+    const start=()=>{
+      const cands=sysCands();
+      const i=sysVoiceName?cands.findIndex(v=>v.name===sysVoiceName):-1;
+      go(i>0?i:0);
+    };
+    // 上一句刚结束就立刻 speak 容易失败：先 cancel 并留一拍
+    if(speechSynthesis.speaking||speechSynthesis.pending){try{speechSynthesis.cancel();}catch(e){}setTimeout(start,180);}
+    else setTimeout(start,120);
+  });
+}
+if(sysSupported())speechSynthesis.onvoiceschanged=()=>{sysVoiceName=sysVoiceName||null;};
+
 /* ================= 全局状态 ================= */
 let BOOK=null,CHS=[],CH=0;
 let paraEls=[],curParaEl=null;
@@ -472,24 +538,34 @@ function playBlob(blob){
   });
 }
 async function pump(list,start,token){
-  let i=start;
+  let i=start,failed=false;
   while(i<list.length&&token===stopToken){
     const s=list[i++];
     highlightSent(s);
-    let blob;
-    try{blob=await tts.synthesize(s.text,SET.voice,SET.rate);}
-    catch(e){toast('TTS 失败：'+e.message);break;}
+    let blob=null;
+    if(ttsMode==='edge'){
+      try{blob=await tts.synthesize(s.text,SET.voice,SET.rate);}
+      catch(e){
+        if(!sysSupported()){toast('朗读失败：'+e.message);failed=true;break;}
+        ttsMode='system';
+        toast('在线语音连不上，已改用系统语音');
+      }
+    }
     if(token!==stopToken)break;
-    await playBlob(blob);
+    if(blob)await playBlob(blob);else await speakSystem(s.text,SET.rate);
+    if(token!==stopToken)break;
     unhighlight();
   }
-  if(token===stopToken){toast('本章朗读完毕');stopReading();}
+  if(token===stopToken){if(!failed)toast('本章朗读完毕');stopReading();}
 }
 async function startReading(){
   if(readerRunning){stopReading();return;}
   const list=buildSentenceList();
   if(!list.length){toast('本章没有可朗读的内容');return;}
   readerRunning=true;
+  ttsMode='edge';   // 每次点朗读都先试在线语音，连不上再自动兜底
+  sysStop=false;
+  sysBad.clear();   // 每轮重新试一遍候选语音（上次失败的可能只是临时故障）
   $('#btnSpeak').classList.add('hide');$('#btnStop').classList.remove('hide');
   $('#btnSpeak').textContent='🔊 跟读中';
   const start=list.findIndex(s=>s.paraIdx>=firstVisiblePara());
@@ -501,6 +577,9 @@ function stopReading(){
   readerRunning=false;
   audio.pause();
   if(playAbort)playAbort();   // 让 pump 里等待播放结束的 await 立刻返回，避免卡死
+  sysStop=true;
+  if(sysSupported()){try{speechSynthesis.cancel();}catch(e){}}
+  if(sysAbort)sysAbort();
   unhighlight();
   $('#btnSpeak').classList.remove('hide');$('#btnStop').classList.add('hide');
   $('#btnSpeak').textContent='🔊 朗读';
