@@ -356,10 +356,16 @@ const tts=new EdgeTTS();
    所以这里给候选语音打分排序，并在报错时换下一个候选（自愈）。 */
 let ttsMode='edge',sysVoiceName=null,sysAbort=null,sysStop=false;
 const sysBad=new Set();
+const SYS_ALIAS={Xiaoxiao:'晓晓',Xiaoyi:'晓伊',Yunxi:'云希',Yunjian:'云健',Yunyang:'云扬',Yunxia:'云夏',Xiaobei:'晓北',Xiaoni:'晓妮'};
 function sysSupported(){return typeof speechSynthesis!=='undefined'&&typeof SpeechSynthesisUtterance!=='undefined';}
 function sysScore(v){
   let s=v.localService?100:0;                       // 离线语音最稳
   if(/Mainland|大陆/i.test(v.name))s+=50;
+  const persona=/zh-CN-(?:[a-z]+-)?([A-Za-z]+)Neural$/i.exec(SET.voice||'');   // 尽量沿用下拉里选的那个声音
+  if(persona){
+    const en=persona[1],cn=SYS_ALIAS[en];
+    if(new RegExp(en,'i').test(v.name)||(cn&&v.name.includes(cn)))s+=60;
+  }
   if(/Xiaoxiao|晓晓/i.test(v.name))s+=30;
   if(/Xiaoyi|晓伊|Yunxi|云希/i.test(v.name))s+=20;
   if(/zh[-_]CN/i.test(v.lang))s+=15;
