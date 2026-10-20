@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>本地小说阅读器 · 番茄风格 + Edge TTS 朗读</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg">
 <style>
 :root{
   --bg:#eef0f4; --surface:#ffffff; --surface2:#f6f7fa; --text:#262626; --sub:#8f8f96;
@@ -49,7 +50,9 @@ body[data-theme="night"] .empty{text-shadow:0 1px 10px rgba(0,0,0,.6)}
 /* ============ 书架 ============ */
 .shelf-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 22px;background:var(--surface);border-bottom:1px solid var(--line)}
 .shelf-head h1{font-size:20px;display:flex;align-items:center;gap:8px}
-.shelf-head h1 .logo{color:var(--accent)}
+.shelf-head h1 .logo{flex:none;width:auto;height:27px;display:block;color:var(--text);overflow:visible}
+.shelf-head h1 .logo .leaf{transform-origin:30px 34px;transition:transform .35s cubic-bezier(.2,.8,.3,1)}
+.shelf-head h1:hover .logo .leaf{transform:rotate(-6deg)}
 .shelf-actions{display:flex;gap:10px}
 .btn{border-radius:999px;padding:8px 18px;font-size:14px;background:var(--accent);color:#fff;display:inline-flex;align-items:center;gap:6px;transition:opacity .2s,transform .15s}
 .btn:hover{opacity:.9}
@@ -124,7 +127,22 @@ mark.cur{background:var(--mark);color:inherit;border-radius:3px}
 <!-- ============ 书架 ============ -->
 <div id="shelf" class="screen">
   <div class="shelf-head">
-    <h1><span class="logo">📖</span> 本地小说阅读器</h1>
+    <h1>
+      <svg class="logo" viewBox="0 0 64 64" width="34" height="34" role="img" aria-label="本地小说阅读器">
+        <defs>
+          <linearGradient id="logoLeaf" x1="28" y1="33" x2="46" y2="54" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#76bf6b"/><stop offset=".5" stop-color="#3d8f52"/><stop offset="1" stop-color="#1f6336"/>
+          </linearGradient>
+        </defs>
+        <g class="leaf">
+          <path d="M27.40 33.80 27.10 36.21 27.31 38.16 27.72 39.92 28.31 41.54 29.05 43.02 29.93 44.36 30.96 45.58 32.11 46.69 33.39 47.69 34.77 48.59 36.24 49.41 37.79 50.16 39.41 50.85 41.08 51.49 42.79 52.10 44.54 52.68 44.25 50.80 43.90 48.97 43.51 47.18 43.05 45.46 42.51 43.80 41.87 42.24 41.11 40.78 40.23 39.42 39.22 38.19 38.06 37.09 36.75 36.13 35.28 35.30 33.66 34.62 31.86 34.08 29.87 33.73Z" fill="url(#logoLeaf)"/>
+          <path d="M30.46 37.22 32.24 39.20 34.08 41.26 35.93 43.33 37.73 45.34 39.41 47.23 40.93 48.92 42.22 50.36 43.21 51.47" fill="none" stroke="#f0fbee" stroke-opacity=".62" stroke-width="1.1" stroke-linecap="round"/>
+          <path d="M33.18 40.26 32.32 43.13M33.18 40.26 36.13 39.72M36.24 43.68 35.55 45.98M36.24 43.68 38.60 43.25M38.96 46.72 38.47 48.35M38.96 46.72 40.63 46.41" fill="none" stroke="#f0fbee" stroke-opacity=".45" stroke-width=".85" stroke-linecap="round"/>
+        </g>
+        <path d="M17.5 12H33.6C42.0 12 46.4 16.6 46.4 23.0C46.4 28.6 43.8 32.3 40.0 34.4C37.4 35.9 32.4 36.1 26.5 35.6V52H17.5Z M26.5 19.6H32.8C36.8 19.6 38.2 21.6 38.2 23.6C38.2 25.8 36.6 27.4 32.9 27.4H26.5Z" fill="currentColor" fill-rule="evenodd"/>
+      </svg>
+      本地小说阅读器
+    </h1>
     <div class="shelf-actions">
       <label class="btn">📤 上传 TXT 小说
         <input type="file" id="fileInput" accept=".txt,text/plain" hidden>
