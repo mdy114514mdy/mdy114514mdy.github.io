@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+
+# ---- 如果你想把内容也开放给 AI 搜索（推荐，能被 ChatGPT / Perplexity 引用）----
+# 上面已默认全放行，无需额外配置。
+#
+# ---- 如果你想禁止 AI 训练爬虫（不影响 Google/Bing 收录），把下面几行取消注释 ----
+# User-agent: GPTBot
+# Disallow: /
+#
+# User-agent: ClaudeBot
+# Disallow: /
+#
+# User-agent: CCBot
+# Disallow: /
+#
+# User-agent: Bytespider
+# Disallow: /
+
+Sitemap: https://mdy114514mdy.us.ci/sitemap.xml
