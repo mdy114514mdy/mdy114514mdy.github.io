@@ -510,9 +510,18 @@ const fmtSize = n => n > 1048576 ? (n/1048576).toFixed(1)+' MB' : Math.round(n/1
    打印机探测（纯前端，用 <img> 探测内嵌网页的静态资源）
    ============================================================ */
 function probePrinter(){
+  const ip = S.printerIP;
+
+  // HTTPS 页面无法访问局域网 http 设备（混合内容拦截），直接说明，别误报离线
+  if (location.protocol === 'https:'){
+    els.dot.className = 'dot';
+    els.printerLabel.textContent = '打印时选 M126nw';
+    els.hint.textContent = '公网页面探测不到局域网打印机 · 直接点打印即可';
+    return;
+  }
+
   els.dot.className = 'dot checking';
   els.printerLabel.textContent = '检测中…';
-  const ip = S.printerIP;
   let done = false;
   const finish = (ok)=>{
     if (done) return; done = true;
@@ -528,12 +537,14 @@ function probePrinter(){
   probe.onload = ()=>{ clearTimeout(t); finish(true); };
   probe.onerror = ()=>{ clearTimeout(t); finish(false); };
   probe.src = 'http://' + ip + '/Images/logo.gif?_=' + Date.now();
-  // 兜底：4.5 秒没结果按失败处理（有些机型不支持该路径）
   setTimeout(()=>{ if(!done){ clearTimeout(t); finish(false); } }, 5200);
 }
 
 els.probeBtn.onclick = ()=>{
-  if (event && event.shiftKey) return;
+  if (location.protocol === 'https:'){
+    showModal('打印机在线状态', 'https-probe');
+    return;
+  }
   probePrinter();
 };
 
@@ -1661,6 +1672,25 @@ function showModal(title, kind){
         '<li>内置的 PDF 生成器只负责图片页和文本页；Word 页面是浏览器的原生排版，转成图片反而会掉画质。</li>' +
         '</ol>'
     },
+    'https-probe': {
+      sub:'这页在公网 HTTPS 上，浏览器不允许它访问局域网里的 http 设备',
+      body:
+        '<ol>' +
+        '<li>这是浏览器的<b>混合内容保护</b>：https 页面加载 http 资源会被直接拦掉，不是打印机掉线。</li>' +
+        '<li>点<b>打印</b>照样能打到 <code>' + ip + '</code>——打印走的是系统打印服务（AirPrint / HP 打印服务），跟网页发请求是两条路。</li>' +
+        '<li>只有在<b>同一台电脑</b>上用本地文件（<code>file://</code>）或 <code>http://</code> 打开时，右上角才会显示真实在线状态。</li>' +
+        '</ol>'
+    },
+    'silent': {
+      sub:'为什么每次都要弹打印对话框',
+      body:
+        '<ol>' +
+        '<li><code>window.print()</code> 按标准定义就是「打开打印界面」，浏览器<b>不提供</b>静默打印的 JS 接口——这是安全模型，任何网页都绕不过。</li>' +
+        '<li>唯一的口子是在<b>启动浏览器时加参数</b>：<code>--kiosk-printing</code>，这时 <code>print()</code> 直接发到系统默认打印机，不弹框。</li>' +
+        '<li>电脑上用目录里的 <code>静默打印.bat</code> 启动就是这个模式。手机上（iOS/Android）系统层面没有这个开关，只能走正常的打印面板。</li>' +
+        '<li>常规模式下第一次会麻烦一点；Chrome / Safari 会<b>记住你上次选的打印机和边距</b>，之后就是「打印 → 打印」两下。</li>' +
+        '</ol>'
+    },
     'help': {
       sub:'HP LaserJet Pro MFP M126nw · ' + ip,
       body:
@@ -1671,6 +1701,7 @@ function showModal(title, kind){
         '<li><b>边距</b>：打印对话框里把「边距」选成<b>无边距/0</b>，否则会出现一圈额外的白边，和这里的预览不一致。</li>' +
         '<li><b>Word 文档</b>：按原样渲染，表格/字体/页面尺寸都保留；纸张会自动跟着文档走。</li>' +
         '<li><b>相机拍的证件/票据</b>：打开「文档增强」，会自动拉直对比度，复印效果更像扫描件。</li>' +
+        '<li><b>嫌每次都弹打印框</b>：电脑上用目录里的 <code>静默打印.bat</code> 启动，点一下就出纸；手机系统没有这个开关，但会记住上次选的打印机。</li>' +
         '</ol>'
     }
   };
@@ -1885,6 +1916,12 @@ function boot(){
 
   render();
   probePrinter();
+
+  // 静默打印模式（由 --kiosk-printing 启动时带 #silent）
+  if (location.hash === '#silent'){
+    els.hint.textContent = '静默模式 · 点打印直接出纸';
+    els.printerLabel.textContent = '静默打印';
+  }
 
   // 打印前把 transform 清掉，保证尺寸准确
   window.addEventListener('beforeprint', ()=>{
